@@ -26,12 +26,14 @@ typedef struct
 
 /* 打包：灯光状态 -> CAN 灯光控制帧 */
 void CanProtocol_BuildLightControl(CanProtocolFrame *frame,
-                                    uint8_t light_on);
+                                    uint8_t light_on,
+                                    uint8_t command_sequence);
 
 /* 解析：CAN 灯光控制帧 -> 灯光状态
    返回 1U 表示该报文有效；返回 0U 表示 ID 或长度不匹配 */
 uint8_t CanProtocol_ParseLightControl(const CanProtocolFrame *frame,
-                                       uint8_t *light_on);
+                                       uint8_t *light_on,
+                                       uint8_t *command_sequence);
 
 void CanProtocol_BuildHeartbeat(CanProtocolFrame *frame,
                                 uint8_t sequence);
@@ -40,6 +42,7 @@ uint8_t CanProtocol_ParseHeartbeat(const CanProtocolFrame *frame,
                                    uint8_t *sequence);
 
 uint8_t CanProtocol_ParseLightStatus(const CanProtocolFrame *frame,
-                                     uint8_t *light_on);
+                                     uint8_t *light_on,
+                                     uint8_t *command_sequence);
 
 #endif

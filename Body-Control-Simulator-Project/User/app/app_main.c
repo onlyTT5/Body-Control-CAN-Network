@@ -7,6 +7,16 @@
 #include "bsp_can.h"
 
 #define APP_CAN_LOOPBACK_TEST_ENABLE  0U
+#define APP_LIGHT_RETRY_INTERVAL_MS  500U
+#define APP_LIGHT_MAX_RETRIES        2U
+
+static uint8_t s_next_light_command_sequence = 0U;
+static uint8_t s_pending_light_command_sequence = 0U;
+static uint8_t s_light_command_pending = 0U;
+static uint8_t s_pending_light_on = 0U;
+static uint8_t s_light_retry_count = 0U;
+static uint8_t s_last_needs_sync = 0U;
+static uint32_t s_last_light_send_tick = 0U;
 
 static void AppMain_FlashLed(uint8_t count, uint32_t delay_ms)
 {
@@ -26,39 +36,43 @@ static uint8_t AppMain_CanProtocolSelfTest(void)
 {
     CanProtocolFrame frame;
     uint8_t light_on;
+    uint8_t command_sequence;
 
     /* 测试 1：灯光开启帧的构造与解析 */
-    CanProtocol_BuildLightControl(&frame, 1U);
+    CanProtocol_BuildLightControl(&frame, 1U, 0x5AU);
 
     if((frame.std_id != CAN_ID_LIGHT_CONTROL) ||
             (frame.dlc != CAN_PROTOCOL_DLC) ||
-            (frame.data[0] != CAN_LIGHT_ON_MASK))
+            (frame.data[0] != CAN_LIGHT_ON_MASK) ||
+            (frame.data[1] != 0x5AU))
     {
         return 0U;
     }
 
     light_on = 0U;
 
-    if(CanProtocol_ParseLightControl(&frame, &light_on) != 1U)
+    if(CanProtocol_ParseLightControl(&frame, &light_on,
+                                     &command_sequence) != 1U)
     {
         return 0U;
     }
 
-    if(light_on != 1U)
+    if((light_on != 1U) || (command_sequence != 0x5AU))
     {
         return 0U;
     }
 
     /* 测试 2：灯光关闭帧的构造与解析 */
-    CanProtocol_BuildLightControl(&frame, 0U);
+    CanProtocol_BuildLightControl(&frame, 0U, 0x5BU);
     light_on = 1U;
 
-    if(CanProtocol_ParseLightControl(&frame, &light_on) != 1U)
+    if(CanProtocol_ParseLightControl(&frame, &light_on,
+                                     &command_sequence) != 1U)
     {
         return 0U;
     }
 
-    if(light_on != 0U)
+    if((light_on != 0U) || (command_sequence != 0x5BU))
     {
         return 0U;
     }
@@ -66,7 +80,8 @@ static uint8_t AppMain_CanProtocolSelfTest(void)
     /* 测试 3：错误 ID 必须被拒绝 */
     frame.std_id = 0x101U;
 
-    if(CanProtocol_ParseLightControl(&frame, &light_on) != 0U)
+    if(CanProtocol_ParseLightControl(&frame, &light_on,
+                                     &command_sequence) != 0U)
     {
         return 0U;
     }
@@ -75,7 +90,8 @@ static uint8_t AppMain_CanProtocolSelfTest(void)
     frame.std_id = CAN_ID_LIGHT_CONTROL;
     frame.dlc = 7U;
 
-    if(CanProtocol_ParseLightControl(&frame, &light_on) != 0U)
+    if(CanProtocol_ParseLightControl(&frame, &light_on,
+                                     &command_sequence) != 0U)
     {
         return 0U;
     }
@@ -93,11 +109,12 @@ static uint8_t AppMain_CanLoopbackSelfTest(void)
     uint8_t rx_dlc;
 
     uint8_t light_on;
+    uint8_t command_sequence;
     uint8_t i;
     uint32_t start_tick;
 
     /* 构造“灯光开启”的 CAN ID 0x100 报文 */
-    CanProtocol_BuildLightControl(&tx_frame, 1U);
+    CanProtocol_BuildLightControl(&tx_frame, 1U, 0x5AU);
 
     /* 通过真实 bxCAN 外设发送；LoopBack 模式下会回到本机接收 FIFO */
     if(BspCan_SendStdData(tx_frame.std_id,
@@ -131,8 +148,10 @@ static uint8_t AppMain_CanLoopbackSelfTest(void)
 
             /* 验证收到的是 0x100 灯光帧，且解析结果为 ON */
             if((CanProtocol_ParseLightControl(&rx_frame,
-                                              &light_on) == 1U) &&
-                    (light_on == 1U))
+                                              &light_on,
+                                              &command_sequence) == 1U) &&
+                    (light_on == 1U) &&
+                    (command_sequence == 0x5AU))
             {
                 return 1U;
             }
@@ -145,12 +164,48 @@ static uint8_t AppMain_CanLoopbackSelfTest(void)
 static HAL_StatusTypeDef AppMain_SendLightControl(uint8_t light_on)
 {
     CanProtocolFrame tx_frame;
+    HAL_StatusTypeDef send_status;
 
-    CanProtocol_BuildLightControl(&tx_frame, light_on);
+    s_pending_light_on = light_on;
+    s_pending_light_command_sequence = s_next_light_command_sequence;
+    s_light_command_pending = 1U;
+    s_light_retry_count = 0U;
+    s_last_light_send_tick = HAL_GetTick();
+    s_next_light_command_sequence++;
 
-    return BspCan_SendStdData(tx_frame.std_id,
-                              tx_frame.data,
-                              tx_frame.dlc);
+    CanProtocol_BuildLightControl(&tx_frame, light_on,
+                                  s_pending_light_command_sequence);
+
+    send_status = BspCan_SendStdData(tx_frame.std_id,
+                                     tx_frame.data,
+                                     tx_frame.dlc);
+
+    return send_status;
+}
+
+static void AppMain_RetryLightControl(void)
+{
+    CanProtocolFrame tx_frame;
+    uint32_t current_tick;
+
+    if((s_light_command_pending == 0U) ||
+       (s_light_retry_count >= APP_LIGHT_MAX_RETRIES) ||
+       (BodyControl_GetState()->can_online == 0U))
+    {
+        return;
+    }
+
+    current_tick = HAL_GetTick();
+    if((current_tick - s_last_light_send_tick) < APP_LIGHT_RETRY_INTERVAL_MS)
+    {
+        return;
+    }
+
+    CanProtocol_BuildLightControl(&tx_frame, s_pending_light_on,
+                                  s_pending_light_command_sequence);
+    (void)BspCan_SendStdData(tx_frame.std_id, tx_frame.data, tx_frame.dlc);
+    s_light_retry_count++;
+    s_last_light_send_tick = current_tick;
 }
 
 static void AppMain_ProcessCanRx(void)
@@ -163,8 +218,10 @@ static void AppMain_ProcessCanRx(void)
     uint8_t heartbeat_sequence;
     uint8_t i;
     uint8_t reported_light_on;
+	uint8_t command_sequence;
 	uint8_t was_online;
 	uint8_t needs_sync;
+    uint8_t new_sync_request;
 
     while(BspCan_ReceiveStdData(&rx_id, rx_data, &rx_dlc))
     {
@@ -181,8 +238,15 @@ static void AppMain_ProcessCanRx(void)
             rx_frame.data[i] = rx_data[i];
         }
 
-        if(CanProtocol_ParseLightControl(&rx_frame, &light_on))
+        if(CanProtocol_ParseLightControl(&rx_frame, &light_on,
+                                         &command_sequence))
         {
+            /* External CAN control: correlate B's reply, but do not retry
+               a command owned by the external sender. */
+            s_pending_light_command_sequence = command_sequence;
+            s_pending_light_on = light_on;
+            s_light_command_pending = 1U;
+            s_light_retry_count = APP_LIGHT_MAX_RETRIES;
             BodyControl_SetLight(light_on);
 			Ui_UpdateLight(BodyControl_GetState());
 			Ui_UpdateActuatorLight(BodyControl_GetState());
@@ -192,27 +256,37 @@ static void AppMain_ProcessCanRx(void)
 			was_online = BodyControl_GetState()->can_online;
 			needs_sync = ((rx_frame.data[1] &
 						   CAN_HEARTBEAT_NEEDS_SYNC_MASK) != 0U) ? 1U : 0U;
+			new_sync_request = ((needs_sync != 0U) &&
+                                (s_last_needs_sync == 0U)) ? 1U : 0U;
 
-			BodyControl_OnCanHeartbeat(heartbeat_sequence, needs_sync);
+			BodyControl_OnCanHeartbeat(heartbeat_sequence, new_sync_request);
 			Ui_UpdateCanStatus(BodyControl_GetState());
 
-			if (needs_sync != 0U)
+			if (new_sync_request != 0U)
 			{
 				Ui_UpdateActuatorLight(BodyControl_GetState());
 			}
 
-			if ((was_online == 0U) || (needs_sync != 0U))
+			if ((was_online == 0U) ||
+                (new_sync_request != 0U))
 			{
 				(void)AppMain_SendLightControl(
 					BodyControl_GetState()->light_on
 				);
 			}
+			s_last_needs_sync = needs_sync;
 		}
         else if(CanProtocol_ParseLightStatus(&rx_frame,
-                                             &reported_light_on))
+                                             &reported_light_on,
+                                             &command_sequence))
         {
-            BodyControl_OnLightStatus(reported_light_on);
-            Ui_UpdateActuatorLight(BodyControl_GetState());
+            if((s_light_command_pending != 0U) &&
+               (command_sequence == s_pending_light_command_sequence))
+            {
+                s_light_command_pending = 0U;
+                BodyControl_OnLightStatus(reported_light_on);
+                Ui_UpdateActuatorLight(BodyControl_GetState());
+            }
         }
     }
 }
@@ -274,9 +348,12 @@ void AppMain_Run(void)
     (void)BodyControl_HeartbeatTask();
 	if (BodyControl_CanTimeoutTask())
 	{
+		s_light_command_pending = 0U;
+		s_last_needs_sync = 0U;
 		Ui_UpdateCanStatus(BodyControl_GetState());
 		Ui_UpdateActuatorLight(BodyControl_GetState());
 	}
+	AppMain_RetryLightControl();
 	if (BodyControl_LightReplyTimeoutTask() != 0U)
 	{
 		Ui_UpdateActuatorLight(BodyControl_GetState());

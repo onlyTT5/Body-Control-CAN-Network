@@ -44,6 +44,7 @@ void ActuatorApp_Run(void)
 {
     uint32_t current_tick;
     uint8_t requested_light_on;
+    uint8_t command_sequence;
 
     current_tick = BspTick_GetMs();
 
@@ -71,7 +72,8 @@ void ActuatorApp_Run(void)
                              &s_rx_frame.dlc) == 1U)
     {
         if(CanProtocol_ParseLightControl(&s_rx_frame,
-                                         &requested_light_on) == 1U)
+                                         &requested_light_on,
+                                         &command_sequence) == 1U)
         {
             if(requested_light_on != s_light_on)
             {
@@ -85,7 +87,8 @@ void ActuatorApp_Run(void)
             }
 			s_needs_sync = 0U;
             /* 每条有效命令都回报节点 B 当前的实际灯光状态 */
-            CanProtocol_BuildLightStatus(&s_tx_frame, s_light_on);
+            CanProtocol_BuildLightStatus(&s_tx_frame, s_light_on,
+                                         command_sequence);
 
             (void)BspCan_SendStdData(s_tx_frame.std_id,
                                      s_tx_frame.data,

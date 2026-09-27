@@ -22,9 +22,10 @@ void CanProtocol_BuildHeartbeat(CanProtocolFrame *frame,
 }
 
 uint8_t CanProtocol_ParseLightControl(const CanProtocolFrame *frame,
-                                      uint8_t *light_on)
+                                      uint8_t *light_on,
+                                      uint8_t *command_sequence)
 {
-    if ((frame == 0) || (light_on == 0))
+    if ((frame == 0) || (light_on == 0) || (command_sequence == 0))
     {
         return 0U;
     }
@@ -36,12 +37,14 @@ uint8_t CanProtocol_ParseLightControl(const CanProtocolFrame *frame,
     }
 
     *light_on = ((frame->data[0] & CAN_LIGHT_ON_MASK) != 0U) ? 1U : 0U;
+    *command_sequence = frame->data[1];
 
     return 1U;
 }
 
 void CanProtocol_BuildLightStatus(CanProtocolFrame *frame,
-                                  uint8_t light_on)
+                                  uint8_t light_on,
+                                  uint8_t command_sequence)
 {
     uint8_t i;
 
@@ -59,4 +62,5 @@ void CanProtocol_BuildLightStatus(CanProtocolFrame *frame,
     }
 
     frame->data[0] = (light_on != 0U) ? CAN_LIGHT_ON_MASK : 0U;
+    frame->data[1] = command_sequence;
 }

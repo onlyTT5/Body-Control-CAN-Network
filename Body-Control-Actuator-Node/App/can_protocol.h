@@ -24,9 +24,11 @@ void CanProtocol_BuildHeartbeat(CanProtocolFrame *frame,
                                 uint8_t sequence);
 
 uint8_t CanProtocol_ParseLightControl(const CanProtocolFrame *frame,
-                                      uint8_t *light_on);
+                                      uint8_t *light_on,
+                                      uint8_t *command_sequence);
 
 void CanProtocol_BuildLightStatus(CanProtocolFrame *frame,
-                                  uint8_t light_on);
+                                  uint8_t light_on,
+                                  uint8_t command_sequence);
 
 #endif

@@ -10,7 +10,7 @@ void Ui_ShowBootSelfTest(void)
 {
     OLED_Clear();
 
-    OLED_ShowString(0, 10, "BODY CONTROL V0.2");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.3");
     OLED_ShowString(2, 20, "OLED: ON");
     OLED_ShowString(4, 20, "BTN: READY");
     OLED_ShowString(6, 20, "CAN: OFFLINE");
@@ -22,7 +22,7 @@ void Ui_InitDashboard(void)
     OLED_Clear();
 
     /* 固定内容：不需要重复刷新 */
-    OLED_ShowString(0, 10, "BODY CONTROL V0.2");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.3");
     OLED_ShowString(2, 20, "CAN: OFFLINE");
 }
 

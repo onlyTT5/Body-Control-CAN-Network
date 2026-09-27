@@ -94,6 +94,7 @@ static const uint8_t *OLED_GetGlyph(char ch)
     static const uint8_t n0[5] = {0x3E, 0x51, 0x49, 0x45, 0x3E};
     static const uint8_t n1[5] = {0, 0x42, 0x7F, 0x40, 0};
 	static const uint8_t n2[5] = {0x42, 0x61, 0x51, 0x49, 0x46};
+    static const uint8_t n3[5] = {0x21, 0x41, 0x45, 0x4B, 0x31};
     static const uint8_t A[5] = {0x7E, 0x11, 0x11, 0x11, 0x7E};
     static const uint8_t B[5] = {0x7F, 0x49, 0x49, 0x49, 0x36};
     static const uint8_t C[5] = {0x3E, 0x41, 0x41, 0x41, 0x22};
@@ -121,6 +122,7 @@ static const uint8_t *OLED_GetGlyph(char ch)
         case 'O': return O; case 'R': return R; case 'T': return T;
         case 'V': return V; case 'W': return W; case 'Y': return Y;
         case '0': return n0; case '1': return n1; case '2': return n2;
+        case '3': return n3;
         case '.': return dot; case ':': return colon;
         default: return sp;
     }
