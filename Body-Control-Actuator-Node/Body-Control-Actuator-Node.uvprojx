@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>.\Start;.\Library;.\User;.\Bsp</IncludePath>
+              <IncludePath>.\Start;.\Library;.\User;.\Bsp;.\App</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -562,6 +562,26 @@
               <FileName>bsp_buzzer.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Bsp\bsp_buzzer.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Bsp\bsp_led.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>can_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\App\can_protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>actuator_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\App\actuator_app.c</FilePath>
             </File>
           </Files>
         </Group>

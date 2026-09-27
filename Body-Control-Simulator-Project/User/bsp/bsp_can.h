@@ -5,7 +5,9 @@
 
 #define BSP_CAN_MAX_DLC  8U
 
-HAL_StatusTypeDef BspCan_Init(void);
+HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
+                              uint16_t filter_id1,
+                              uint16_t filter_id2);
 
 HAL_StatusTypeDef BspCan_SendStdData(uint16_t standard_id,
                                      const uint8_t *data,

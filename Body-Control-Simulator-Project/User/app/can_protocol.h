@@ -13,6 +13,10 @@
 /* 0x101 心跳帧 */
 #define CAN_ID_HEARTBEAT        0x101U
 
+#define CAN_ID_LIGHT_STATUS  0x102U
+
+#define CAN_HEARTBEAT_NEEDS_SYNC_MASK  0x01U
+
 typedef struct
 {
     uint16_t std_id;                    /* 11 位标准 CAN ID */
@@ -34,5 +38,8 @@ void CanProtocol_BuildHeartbeat(CanProtocolFrame *frame,
 
 uint8_t CanProtocol_ParseHeartbeat(const CanProtocolFrame *frame,
                                    uint8_t *sequence);
+
+uint8_t CanProtocol_ParseLightStatus(const CanProtocolFrame *frame,
+                                     uint8_t *light_on);
 
 #endif

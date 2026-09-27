@@ -1,19 +1,36 @@
 #include "bsp_can.h"
 
-HAL_StatusTypeDef BspCan_Init(void)
+HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
+                              uint16_t filter_id1,
+							  uint16_t filter_id2)
 {
     CAN_FilterTypeDef filter_config;
 
-    /* 当前接收全部 CAN 报文；后续可改成只接收指定 ID */
-    filter_config.FilterIdHigh = 0x0000U;
-    filter_config.FilterIdLow = 0x0000U;
-    filter_config.FilterMaskIdHigh = 0x0000U;
-    filter_config.FilterMaskIdLow = 0x0000U;
+    if ((filter_id0 > 0x7FFU) ||
+    (filter_id1 > 0x7FFU) ||
+    (filter_id2 > 0x7FFU))
+    {
+        return HAL_ERROR;
+    }
+
+    /*
+     * 16 位列表模式共有四个匹配槽位。
+     * 填入 0x100、0x101、0x100、0x101，
+     * 即只接收这两个标准数据帧 ID。
+     */
+    filter_config.FilterIdHigh =
+    (uint16_t)(filter_id0 << 5);      /* 0x100 */
+	filter_config.FilterIdLow =
+		(uint16_t)(filter_id1 << 5);      /* 0x101 */
+	filter_config.FilterMaskIdHigh =
+		(uint16_t)(filter_id2 << 5);      /* 0x102 */
+	filter_config.FilterMaskIdLow =
+		(uint16_t)(filter_id2 << 5);      /* 重复 0x102 */
 
     filter_config.FilterFIFOAssignment = CAN_FILTER_FIFO0;
     filter_config.FilterBank = 0U;
-    filter_config.FilterMode = CAN_FILTERMODE_IDMASK;
-    filter_config.FilterScale = CAN_FILTERSCALE_32BIT;
+    filter_config.FilterMode = CAN_FILTERMODE_IDLIST;
+    filter_config.FilterScale = CAN_FILTERSCALE_16BIT;
     filter_config.FilterActivation = ENABLE;
     filter_config.SlaveStartFilterBank = 14U;
 

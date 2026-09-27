@@ -4,7 +4,6 @@ uint8_t BspCan_Init(void)
 {
     GPIO_InitTypeDef gpio_init;
     CAN_InitTypeDef can_init;
-    CAN_FilterInitTypeDef filter_init;
 
     /* 开启 GPIOB、AFIO 和 CAN1 时钟 */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB |
@@ -56,19 +55,6 @@ uint8_t BspCan_Init(void)
     {
         return 0U;
     }
-
-    /* 过滤器 0：当前调试阶段先接收全部报文，放入 FIFO0 */
-    filter_init.CAN_FilterNumber = 0U;
-    filter_init.CAN_FilterMode = CAN_FilterMode_IdMask;
-    filter_init.CAN_FilterScale = CAN_FilterScale_32bit;
-    filter_init.CAN_FilterIdHigh = 0x0000U;
-    filter_init.CAN_FilterIdLow = 0x0000U;
-    filter_init.CAN_FilterMaskIdHigh = 0x0000U;
-    filter_init.CAN_FilterMaskIdLow = 0x0000U;
-    filter_init.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
-    filter_init.CAN_FilterActivation = ENABLE;
-
-    CAN_FilterInit(&filter_init);
 
     return 1U;
 }
@@ -158,6 +144,43 @@ uint8_t BspCan_ReceiveStdData(uint16_t *std_id,
     {
         data[i] = rx_msg.Data[i];
     }
+
+    return 1U;
+}
+
+uint8_t BspCan_SetRxStdDataFilter(uint16_t std_id)
+{
+    CAN_FilterInitTypeDef filter_init;
+
+    if (std_id > 0x7FFU)
+    {
+        return 0U;
+    }
+
+    filter_init.CAN_FilterNumber = 0U;
+    filter_init.CAN_FilterMode = CAN_FilterMode_IdMask;
+    filter_init.CAN_FilterScale = CAN_FilterScale_32bit;
+
+    /*
+     * 标准帧 11 位 ID 在 bxCAN 过滤器高 16 位中左移 5 位。
+     * 0x100 << 5 = 0x2000。
+     */
+    filter_init.CAN_FilterIdHigh = (uint16_t)(std_id << 5);
+    filter_init.CAN_FilterIdLow = 0x0000U;
+
+    /*
+     * 高 16 位掩码 0xFFE0：比较全部 11 位标准 ID。
+     * 低 16 位掩码 0x0006：
+     * bit2 比较 IDE=0（标准帧）
+     * bit1 比较 RTR=0（数据帧）
+     */
+    filter_init.CAN_FilterMaskIdHigh = 0xFFE0U;
+    filter_init.CAN_FilterMaskIdLow = 0x0006U;
+
+    filter_init.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
+    filter_init.CAN_FilterActivation = ENABLE;
+
+    CAN_FilterInit(&filter_init);
 
     return 1U;
 }

@@ -10,7 +10,7 @@ void Ui_ShowBootSelfTest(void)
 {
     OLED_Clear();
 
-    OLED_ShowString(0, 10, "BODY CONTROL V0.1");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.2");
     OLED_ShowString(2, 20, "OLED: ON");
     OLED_ShowString(4, 20, "BTN: READY");
     OLED_ShowString(6, 20, "CAN: OFFLINE");
@@ -22,7 +22,7 @@ void Ui_InitDashboard(void)
     OLED_Clear();
 
     /* 固定内容：不需要重复刷新 */
-    OLED_ShowString(0, 10, "BODY CONTROL V0.1");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.2");
     OLED_ShowString(2, 20, "CAN: OFFLINE");
 }
 
@@ -31,11 +31,11 @@ void Ui_UpdateLight(const BodyControlState *state)
 {
     if (state->light_on)
     {
-        OLED_ShowString(4, 20, "LIGHT: ON ");
+        OLED_ShowString(4, 20, "LIGHTA: ON ");
     }
     else
     {
-        OLED_ShowString(4, 20, "LIGHT: OFF");
+        OLED_ShowString(4, 20, "LIGHTA: OFF");
     }
 }
 
@@ -57,7 +57,8 @@ void Ui_ShowStatus(const BodyControlState *state)
 {
     Ui_UpdateCanStatus(state);
     Ui_UpdateLight(state);
-    Ui_UpdateHeartbeat(state);
+    // Ui_UpdateHeartbeat(state);
+	Ui_UpdateActuatorLight(state);
 }
 
 void Ui_UpdateCanStatus(const BodyControlState *state)
@@ -69,5 +70,25 @@ void Ui_UpdateCanStatus(const BodyControlState *state)
     else
     {
         OLED_ShowString(2, 20, "CAN: OFFLINE");
+    }
+}
+
+void Ui_UpdateActuatorLight(const BodyControlState *state)
+{
+	if (state->actuator_reply_timeout != 0U)
+	{
+		OLED_ShowString(6, 20, "LIGHTB: ERROR");
+	}
+	else if (state->actuator_light_valid == 0U)
+	{
+		OLED_ShowString(6, 20, "LIGHTB: WAIT ");
+	}
+    else if (state->actuator_light_on != 0U)
+    {
+        OLED_ShowString(6, 20, "LIGHTB: ON   ");
+    }
+    else
+    {
+        OLED_ShowString(6, 20, "LIGHTB: OFF  ");
     }
 }
