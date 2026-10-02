@@ -20,6 +20,7 @@
 #include "main.h"
 #include "can.h"
 #include "i2c.h"
+#include "spi.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -89,6 +90,7 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_CAN_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 	AppMain_Init();
   /* USER CODE END 2 */

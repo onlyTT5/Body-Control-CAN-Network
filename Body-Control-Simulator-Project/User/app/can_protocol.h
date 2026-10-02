@@ -14,6 +14,13 @@
 #define CAN_ID_HEARTBEAT        0x101U
 
 #define CAN_ID_LIGHT_STATUS  0x102U
+#define CAN_ID_LOG_REQUEST   0x103U
+#define CAN_ID_LOG_SUMMARY   0x104U
+#define CAN_ID_LOG_DETAIL    0x105U
+
+#define CAN_LOG_STATUS_OK          0U
+#define CAN_LOG_STATUS_NOT_FOUND   1U
+#define CAN_LOG_STATUS_READ_ERROR  2U
 
 #define CAN_HEARTBEAT_NEEDS_SYNC_MASK  0x01U
 
@@ -44,5 +51,22 @@ uint8_t CanProtocol_ParseHeartbeat(const CanProtocolFrame *frame,
 uint8_t CanProtocol_ParseLightStatus(const CanProtocolFrame *frame,
                                      uint8_t *light_on,
                                      uint8_t *command_sequence);
+
+uint8_t CanProtocol_ParseLogRequest(const CanProtocolFrame *frame,
+                                    uint8_t *newest_offset);
+
+uint8_t CanProtocol_IsLogClearRequest(const CanProtocolFrame *frame);
+
+void CanProtocol_BuildLogSummary(CanProtocolFrame *frame,
+                                 uint8_t status,
+                                 uint8_t newest_offset,
+                                 uint8_t event_type,
+                                 uint8_t event_data0,
+                                 uint8_t event_data1,
+                                 uint16_t stored_count);
+
+void CanProtocol_BuildLogDetail(CanProtocolFrame *frame,
+                                uint32_t sequence,
+                                uint32_t timestamp_ms);
 
 #endif

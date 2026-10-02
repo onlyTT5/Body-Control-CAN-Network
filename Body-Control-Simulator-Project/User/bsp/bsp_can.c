@@ -2,21 +2,22 @@
 
 HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
                               uint16_t filter_id1,
-							  uint16_t filter_id2)
+							  uint16_t filter_id2,
+                              uint16_t filter_id3)
 {
     CAN_FilterTypeDef filter_config;
 
     if ((filter_id0 > 0x7FFU) ||
     (filter_id1 > 0x7FFU) ||
-    (filter_id2 > 0x7FFU))
+    (filter_id2 > 0x7FFU) ||
+    (filter_id3 > 0x7FFU))
     {
         return HAL_ERROR;
     }
 
     /*
      * 16 位列表模式共有四个匹配槽位。
-     * 填入 0x100、0x101、0x100、0x101，
-     * 即只接收这两个标准数据帧 ID。
+     * 当前四个槽位接收灯控、心跳、状态回报和日志查询。
      */
     filter_config.FilterIdHigh =
     (uint16_t)(filter_id0 << 5);      /* 0x100 */
@@ -25,7 +26,7 @@ HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
 	filter_config.FilterMaskIdHigh =
 		(uint16_t)(filter_id2 << 5);      /* 0x102 */
 	filter_config.FilterMaskIdLow =
-		(uint16_t)(filter_id2 << 5);      /* 重复 0x102 */
+		(uint16_t)(filter_id3 << 5);      /* 0x103 */
 
     filter_config.FilterFIFOAssignment = CAN_FILTER_FIFO0;
     filter_config.FilterBank = 0U;

@@ -7,7 +7,8 @@
 
 HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
                               uint16_t filter_id1,
-                              uint16_t filter_id2);
+                              uint16_t filter_id2,
+                              uint16_t filter_id3);
 
 HAL_StatusTypeDef BspCan_SendStdData(uint16_t standard_id,
                                      const uint8_t *data,
@@ -18,4 +19,3 @@ uint8_t BspCan_ReceiveStdData(uint16_t *standard_id,
                               uint8_t *dlc);
 
 #endif
-																		 
