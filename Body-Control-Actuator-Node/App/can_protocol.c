@@ -64,3 +64,30 @@ void CanProtocol_BuildLightStatus(CanProtocolFrame *frame,
     frame->data[0] = (light_on != 0U) ? CAN_LIGHT_ON_MASK : 0U;
     frame->data[1] = command_sequence;
 }
+
+void CanProtocol_BuildParkDistance(CanProtocolFrame *frame,
+                                   uint8_t valid,
+                                   uint16_t distance_mm,
+                                   uint8_t measurement_sequence)
+{
+    uint8_t i;
+
+    if(frame == 0)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_PARK_DISTANCE;
+    frame->dlc = CAN_PROTOCOL_DLC;
+
+    for(i = 0U; i < CAN_PROTOCOL_DLC; i++)
+    {
+        frame->data[i] = 0U;
+    }
+
+    frame->data[0] = (valid != 0U) ?
+                     CAN_PARK_DISTANCE_VALID_MASK : 0U;
+    frame->data[1] = (uint8_t)distance_mm;
+    frame->data[2] = (uint8_t)(distance_mm >> 8);
+    frame->data[3] = measurement_sequence;
+}

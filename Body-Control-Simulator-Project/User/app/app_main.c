@@ -14,6 +14,7 @@
 #define APP_EVENT_LOG_BOOT_TEST_ENABLE 0U
 #define APP_LIGHT_RETRY_INTERVAL_MS  500U
 #define APP_LIGHT_MAX_RETRIES        2U
+#define APP_PARK_DISTANCE_TIMEOUT_MS 500U
 #define APP_FLASH_TEST_ADDRESS        0x00FFF000UL
 
 static uint8_t s_next_light_command_sequence = 0U;
@@ -23,7 +24,9 @@ static uint8_t s_pending_light_on = 0U;
 static uint8_t s_light_retry_count = 0U;
 static uint8_t s_last_needs_sync = 0U;
 static uint8_t s_event_log_ready = 0U;
+static uint8_t s_park_distance_received = 0U;
 static uint32_t s_last_light_send_tick = 0U;
+static uint32_t s_last_park_distance_tick = 0U;
 
 static void AppMain_FlashLed(uint8_t count, uint32_t delay_ms)
 {
@@ -394,6 +397,9 @@ static void AppMain_ProcessCanRx(void)
     uint8_t needs_sync;
     uint8_t new_sync_request;
     uint8_t log_newest_offset;
+    uint8_t park_distance_valid;
+    uint8_t park_measurement_sequence;
+    uint16_t park_distance_mm;
 
     while(BspCan_ReceiveStdData(&rx_id, rx_data, &rx_dlc))
     {
@@ -473,6 +479,18 @@ static void AppMain_ProcessCanRx(void)
                 Ui_UpdateActuatorLight(BodyControl_GetState());
             }
         }
+        else if(CanProtocol_ParseParkDistance(
+                    &rx_frame,
+                    &park_distance_valid,
+                    &park_distance_mm,
+                    &park_measurement_sequence))
+        {
+            s_park_distance_received = 1U;
+            s_last_park_distance_tick = HAL_GetTick();
+            Ui_UpdateParkDistance(1U,
+                                  park_distance_valid,
+                                  park_distance_mm);
+        }
         else if(CanProtocol_IsLogClearRequest(&rx_frame))
         {
             AppMain_ClearLogAndRespond();
@@ -519,7 +537,8 @@ void AppMain_Init(void)
     if(BspCan_Init(CAN_ID_LIGHT_CONTROL,
                    CAN_ID_HEARTBEAT,
                    CAN_ID_LIGHT_STATUS,
-                   CAN_ID_LOG_REQUEST) != HAL_OK)
+                   CAN_ID_LOG_REQUEST,
+                   CAN_ID_PARK_DISTANCE) != HAL_OK)
     {
         AppMain_FlashLed(1U, 400U);
     }
@@ -595,6 +614,7 @@ void AppMain_Init(void)
 
     Ui_InitDashboard();
     Ui_ShowStatus(BodyControl_GetState());
+    Ui_UpdateParkDistance(0U, 0U, 0U);
 }
 
 void AppMain_Run(void)
@@ -628,6 +648,14 @@ void AppMain_Run(void)
                          s_pending_light_on,
                          s_pending_light_command_sequence);
         Ui_UpdateActuatorLight(BodyControl_GetState());
+    }
+
+    if((s_park_distance_received != 0U) &&
+       ((HAL_GetTick() - s_last_park_distance_tick) >
+        APP_PARK_DISTANCE_TIMEOUT_MS))
+    {
+        s_park_distance_received = 0U;
+        Ui_UpdateParkDistance(1U, 0U, 0U);
     }
 }
 

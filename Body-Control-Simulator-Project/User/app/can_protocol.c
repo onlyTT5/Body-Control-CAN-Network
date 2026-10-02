@@ -109,6 +109,31 @@ uint8_t CanProtocol_ParseLightStatus(const CanProtocolFrame *frame,
     return 1U;
 }
 
+uint8_t CanProtocol_ParseParkDistance(const CanProtocolFrame *frame,
+                                      uint8_t *valid,
+                                      uint16_t *distance_mm,
+                                      uint8_t *measurement_sequence)
+{
+    if((frame == NULL) || (valid == NULL) ||
+       (distance_mm == NULL) || (measurement_sequence == NULL))
+    {
+        return 0U;
+    }
+
+    if((frame->std_id != CAN_ID_PARK_DISTANCE) ||
+       (frame->dlc != CAN_PROTOCOL_DLC))
+    {
+        return 0U;
+    }
+
+    *valid = ((frame->data[0] & CAN_PARK_DISTANCE_VALID_MASK) != 0U) ?
+             1U : 0U;
+    *distance_mm = (uint16_t)frame->data[1] |
+                   ((uint16_t)frame->data[2] << 8);
+    *measurement_sequence = frame->data[3];
+    return 1U;
+}
+
 uint8_t CanProtocol_ParseLogRequest(const CanProtocolFrame *frame,
                                     uint8_t *newest_offset)
 {

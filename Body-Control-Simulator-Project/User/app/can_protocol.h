@@ -17,12 +17,14 @@
 #define CAN_ID_LOG_REQUEST   0x103U
 #define CAN_ID_LOG_SUMMARY   0x104U
 #define CAN_ID_LOG_DETAIL    0x105U
+#define CAN_ID_PARK_DISTANCE 0x111U
 
 #define CAN_LOG_STATUS_OK          0U
 #define CAN_LOG_STATUS_NOT_FOUND   1U
 #define CAN_LOG_STATUS_READ_ERROR  2U
 
 #define CAN_HEARTBEAT_NEEDS_SYNC_MASK  0x01U
+#define CAN_PARK_DISTANCE_VALID_MASK   0x01U
 
 typedef struct
 {
@@ -51,6 +53,11 @@ uint8_t CanProtocol_ParseHeartbeat(const CanProtocolFrame *frame,
 uint8_t CanProtocol_ParseLightStatus(const CanProtocolFrame *frame,
                                      uint8_t *light_on,
                                      uint8_t *command_sequence);
+
+uint8_t CanProtocol_ParseParkDistance(const CanProtocolFrame *frame,
+                                      uint8_t *valid,
+                                      uint16_t *distance_mm,
+                                      uint8_t *measurement_sequence);
 
 uint8_t CanProtocol_ParseLogRequest(const CanProtocolFrame *frame,
                                     uint8_t *newest_offset);

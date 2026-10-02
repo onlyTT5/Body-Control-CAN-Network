@@ -568,6 +568,11 @@
               <FileType>1</FileType>
               <FilePath>.\Bsp\bsp_led.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_ultrasonic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Bsp\bsp_ultrasonic.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

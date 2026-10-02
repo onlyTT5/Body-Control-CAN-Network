@@ -3,14 +3,16 @@
 HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
                               uint16_t filter_id1,
 							  uint16_t filter_id2,
-                              uint16_t filter_id3)
+                              uint16_t filter_id3,
+                              uint16_t filter_id4)
 {
     CAN_FilterTypeDef filter_config;
 
     if ((filter_id0 > 0x7FFU) ||
     (filter_id1 > 0x7FFU) ||
     (filter_id2 > 0x7FFU) ||
-    (filter_id3 > 0x7FFU))
+    (filter_id3 > 0x7FFU) ||
+    (filter_id4 > 0x7FFU))
     {
         return HAL_ERROR;
     }
@@ -34,6 +36,18 @@ HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
     filter_config.FilterScale = CAN_FILTERSCALE_16BIT;
     filter_config.FilterActivation = ENABLE;
     filter_config.SlaveStartFilterBank = 14U;
+
+    if (HAL_CAN_ConfigFilter(&hcan, &filter_config) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    /* 第二个过滤器组的四个槽位都接收超声波距离帧。 */
+    filter_config.FilterIdHigh = (uint16_t)(filter_id4 << 5);
+    filter_config.FilterIdLow = (uint16_t)(filter_id4 << 5);
+    filter_config.FilterMaskIdHigh = (uint16_t)(filter_id4 << 5);
+    filter_config.FilterMaskIdLow = (uint16_t)(filter_id4 << 5);
+    filter_config.FilterBank = 1U;
 
     if (HAL_CAN_ConfigFilter(&hcan, &filter_config) != HAL_OK)
     {
