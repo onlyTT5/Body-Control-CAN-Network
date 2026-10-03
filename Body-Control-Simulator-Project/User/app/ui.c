@@ -6,13 +6,42 @@ void Ui_Init(void)
     OLED_Init();
 }
 
-void Ui_ShowBootSelfTest(void)
+void Ui_ShowBootSelfTest(BspResetCause reset_cause)
 {
     OLED_Clear();
 
-    OLED_ShowString(0, 10, "BODY CONTROL V0.5");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.6");
     OLED_ShowString(2, 20, "OLED: ON");
-    OLED_ShowString(4, 20, "BTN: READY");
+
+    if(reset_cause == BSP_RESET_CAUSE_POWER)
+    {
+        OLED_ShowString(4, 20, "RST: POWER");
+    }
+    else if(reset_cause == BSP_RESET_CAUSE_PIN)
+    {
+        OLED_ShowString(4, 20, "RST: PIN  ");
+    }
+    else if(reset_cause == BSP_RESET_CAUSE_SOFTWARE)
+    {
+        OLED_ShowString(4, 20, "RST: SOFT ");
+    }
+    else if(reset_cause == BSP_RESET_CAUSE_IWDG)
+    {
+        OLED_ShowString(4, 20, "RST: IWDG ");
+    }
+    else if(reset_cause == BSP_RESET_CAUSE_WWDG)
+    {
+        OLED_ShowString(4, 20, "RST: WWDG ");
+    }
+    else if(reset_cause == BSP_RESET_CAUSE_LOW_POWER)
+    {
+        OLED_ShowString(4, 20, "RST: LOWPWR");
+    }
+    else
+    {
+        OLED_ShowString(4, 20, "RST: OTHER");
+    }
+
     OLED_ShowString(6, 20, "CAN: OFFLINE");
 }
 

@@ -879,6 +879,16 @@
               <FileType>1</FileType>
               <FilePath>..\User\bsp\bsp_flash.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_reset.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\bsp\bsp_reset.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_watchdog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\bsp\bsp_watchdog.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

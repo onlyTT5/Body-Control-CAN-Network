@@ -91,3 +91,35 @@ void CanProtocol_BuildParkDistance(CanProtocolFrame *frame,
     frame->data[2] = (uint8_t)(distance_mm >> 8);
     frame->data[3] = measurement_sequence;
 }
+
+void CanProtocol_BuildHealthStatus(CanProtocolFrame *frame,
+                                   uint8_t status_flags,
+                                   uint8_t reset_cause,
+                                   uint8_t can_last_error,
+                                   uint8_t diagnostic_sequence,
+                                   uint32_t uptime_ms)
+{
+    uint8_t i;
+
+    if(frame == 0)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_HEALTH_STATUS;
+    frame->dlc = CAN_PROTOCOL_DLC;
+
+    for(i = 0U; i < CAN_PROTOCOL_DLC; i++)
+    {
+        frame->data[i] = 0U;
+    }
+
+    frame->data[0] = status_flags;
+    frame->data[1] = reset_cause;
+    frame->data[2] = can_last_error;
+    frame->data[3] = diagnostic_sequence;
+    frame->data[4] = (uint8_t)uptime_ms;
+    frame->data[5] = (uint8_t)(uptime_ms >> 8);
+    frame->data[6] = (uint8_t)(uptime_ms >> 16);
+    frame->data[7] = (uint8_t)(uptime_ms >> 24);
+}

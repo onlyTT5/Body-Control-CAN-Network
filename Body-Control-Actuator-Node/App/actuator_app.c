@@ -4,7 +4,9 @@
 #include "bsp_tick.h"
 #include "bsp_buzzer.h"
 #include "bsp_led.h"
+#include "bsp_reset.h"
 #include "bsp_ultrasonic.h"
+#include "bsp_watchdog.h"
 #include "can_protocol.h"
 
 #define ACTUATOR_ULTRASONIC_ENABLE           1U
@@ -27,6 +29,10 @@
 #define ACTUATOR_PARK_BUZZER_FAST_TOGGLE_MS  100U
 #define ACTUATOR_LIGHT_FEEDBACK_BUZZER_MS    100U
 
+/* 改为 1U 可验证停止喂狗后的自动复位，正常固件必须保持 0U。 */
+#define ACTUATOR_WATCHDOG_TEST_ENABLE        0U
+#define ACTUATOR_WATCHDOG_TEST_RUN_MS        5000U
+
 static uint8_t s_light_on = 0U;
 
 static uint8_t s_parking_buzzer_mode = ACTUATOR_PARK_BUZZER_MODE_OFF;
@@ -36,12 +42,14 @@ static uint32_t s_last_parking_buzzer_toggle_tick = 0U;
 static uint32_t s_light_feedback_buzzer_start_tick = 0U;
 
 static uint8_t s_heartbeat_sequence = 0U;
+static uint8_t s_diagnostic_sequence = 0U;
 static uint32_t s_last_heartbeat_tick = 0U;
 
 static CanProtocolFrame s_tx_frame;
 static CanProtocolFrame s_rx_frame;
 
 static uint8_t s_needs_sync = 1U;
+static uint8_t s_ultrasonic_result_valid = 0U;
 
 #if ACTUATOR_ULTRASONIC_ENABLE
 static uint8_t s_ultrasonic_sequence = 0U;
@@ -179,8 +187,58 @@ static void ActuatorApp_BuzzerTask(uint32_t current_tick)
     BspBuzzer_Set(s_parking_buzzer_on);
 }
 
+static void ActuatorApp_SendHealthStatus(uint32_t current_tick)
+{
+    uint32_t can_error_status;
+    uint8_t health_flags;
+    uint8_t can_last_error;
+
+    can_error_status = BspCan_GetErrorStatus();
+    health_flags = 0U;
+
+    if(s_ultrasonic_result_valid == 0U)
+    {
+        health_flags |= CAN_HEALTH_ULTRASONIC_INVALID_MASK;
+    }
+
+    if((can_error_status & CAN_ESR_EWGF) != 0U)
+    {
+        health_flags |= CAN_HEALTH_CAN_WARNING_MASK;
+    }
+
+    if((can_error_status & CAN_ESR_EPVF) != 0U)
+    {
+        health_flags |= CAN_HEALTH_CAN_PASSIVE_MASK;
+    }
+
+    if((can_error_status & CAN_ESR_BOFF) != 0U)
+    {
+        health_flags |= CAN_HEALTH_CAN_BUS_OFF_MASK;
+    }
+
+    if(BspReset_GetCause() == BSP_RESET_CAUSE_IWDG)
+    {
+        health_flags |= CAN_HEALTH_IWDG_RESET_MASK;
+    }
+
+    can_last_error = (uint8_t)((can_error_status & CAN_ESR_LEC) >> 4U);
+
+    CanProtocol_BuildHealthStatus(&s_tx_frame,
+                                  health_flags,
+                                  (uint8_t)BspReset_GetCause(),
+                                  can_last_error,
+                                  s_diagnostic_sequence,
+                                  current_tick);
+
+    (void)BspCan_SendStdData(s_tx_frame.std_id,
+                             s_tx_frame.data,
+                             s_tx_frame.dlc);
+    s_diagnostic_sequence++;
+}
+
 uint8_t ActuatorApp_Init(void)
 {
+    BspReset_Init();
     BspLed_Init();
     BspTick_Init();
     BspBuzzer_Init();
@@ -201,6 +259,10 @@ uint8_t ActuatorApp_Init(void)
     s_last_ultrasonic_tick = BspTick_GetMs();
     s_last_ultrasonic_result_tick = s_last_ultrasonic_tick;
 #endif
+
+    /* 所有外设初始化成功后再启动看门狗，并立即完成第一次喂狗。 */
+    BspWatchdog_Init();
+    BspWatchdog_Feed();
 
     return 1U;
 }
@@ -225,6 +287,7 @@ void ActuatorApp_Run(void)
                                &ultrasonic_valid) != 0U)
     {
         s_ultrasonic_result_received = 1U;
+        s_ultrasonic_result_valid = ultrasonic_valid;
         s_last_ultrasonic_result_tick = current_tick;
 
         parking_buzzer_mode = ActuatorApp_GetParkingBuzzerMode(
@@ -257,6 +320,7 @@ void ActuatorApp_Run(void)
         ACTUATOR_ULTRASONIC_TIMEOUT_MS))
     {
         s_ultrasonic_result_received = 0U;
+        s_ultrasonic_result_valid = 0U;
         ActuatorApp_SetParkingBuzzerMode(ACTUATOR_PARK_BUZZER_MODE_OFF,
                                          current_tick);
     }
@@ -275,6 +339,8 @@ void ActuatorApp_Run(void)
 		(void)BspCan_SendStdData(s_tx_frame.std_id,
 								 s_tx_frame.data,
 								 s_tx_frame.dlc);
+
+        ActuatorApp_SendHealthStatus(current_tick);
 
 		s_heartbeat_sequence++;
 		s_last_heartbeat_tick = current_tick;
@@ -310,4 +376,14 @@ void ActuatorApp_Run(void)
     }
 
     ActuatorApp_BuzzerTask(current_tick);
+
+#if ACTUATOR_WATCHDOG_TEST_ENABLE
+    /* 运行 5 秒后故意停止喂狗，约 4 秒后应由 IWDG 自动复位。 */
+    if(current_tick < ACTUATOR_WATCHDOG_TEST_RUN_MS)
+    {
+        BspWatchdog_Feed();
+    }
+#else
+    BspWatchdog_Feed();
+#endif
 }

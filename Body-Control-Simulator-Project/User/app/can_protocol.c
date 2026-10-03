@@ -134,6 +134,32 @@ uint8_t CanProtocol_ParseParkDistance(const CanProtocolFrame *frame,
     return 1U;
 }
 
+uint8_t CanProtocol_ParseHealthStatus(
+            const CanProtocolFrame *frame,
+            CanProtocolHealthStatus *health_status)
+{
+    if((frame == NULL) || (health_status == NULL))
+    {
+        return 0U;
+    }
+
+    if((frame->std_id != CAN_ID_HEALTH_STATUS) ||
+       (frame->dlc != CAN_PROTOCOL_DLC))
+    {
+        return 0U;
+    }
+
+    health_status->status_flags = frame->data[0];
+    health_status->reset_cause = frame->data[1];
+    health_status->can_last_error = frame->data[2];
+    health_status->diagnostic_sequence = frame->data[3];
+    health_status->uptime_ms = (uint32_t)frame->data[4] |
+                               ((uint32_t)frame->data[5] << 8) |
+                               ((uint32_t)frame->data[6] << 16) |
+                               ((uint32_t)frame->data[7] << 24);
+    return 1U;
+}
+
 uint8_t CanProtocol_ParseLogRequest(const CanProtocolFrame *frame,
                                     uint8_t *newest_offset)
 {

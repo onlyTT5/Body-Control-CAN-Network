@@ -34,7 +34,7 @@ uint8_t BspCan_Init(void)
     CAN_StructInit(&can_init);
 
     can_init.CAN_TTCM = DISABLE;
-    can_init.CAN_ABOM = DISABLE;
+    can_init.CAN_ABOM = ENABLE;   /* Bus-Off 后由硬件自动恢复 */
     can_init.CAN_AWUM = DISABLE;
     can_init.CAN_NART = DISABLE;  /* 允许自动重发 */
     can_init.CAN_RFLM = DISABLE;
@@ -183,4 +183,9 @@ uint8_t BspCan_SetRxStdDataFilter(uint16_t std_id)
     CAN_FilterInit(&filter_init);
 
     return 1U;
+}
+
+uint32_t BspCan_GetErrorStatus(void)
+{
+    return CAN1->ESR;
 }

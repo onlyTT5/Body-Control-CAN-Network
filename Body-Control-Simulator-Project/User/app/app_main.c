@@ -6,6 +6,8 @@
 #include "can_protocol.h"
 #include "bsp_can.h"
 #include "bsp_flash.h"
+#include "bsp_reset.h"
+#include "bsp_watchdog.h"
 #include "event_log.h"
 
 #define APP_CAN_PROTOCOL_SELF_TEST_ENABLE 0U
@@ -17,6 +19,10 @@
 #define APP_PARK_DISTANCE_TIMEOUT_MS 500U
 #define APP_FLASH_TEST_ADDRESS        0x00FFF000UL
 
+/* 改为 1U 可验证停止喂狗后的自动复位，正常固件必须保持 0U。 */
+#define APP_WATCHDOG_TEST_ENABLE      0U
+#define APP_WATCHDOG_TEST_RUN_MS      5000U
+
 static uint8_t s_next_light_command_sequence = 0U;
 static uint8_t s_pending_light_command_sequence = 0U;
 static uint8_t s_light_command_pending = 0U;
@@ -25,8 +31,15 @@ static uint8_t s_light_retry_count = 0U;
 static uint8_t s_last_needs_sync = 0U;
 static uint8_t s_event_log_ready = 0U;
 static uint8_t s_park_distance_received = 0U;
+static uint8_t s_health_status_received = 0U;
+static uint8_t s_last_health_fault_flags = 0U;
+static uint8_t s_last_health_sequence = 0U;
 static uint32_t s_last_light_send_tick = 0U;
 static uint32_t s_last_park_distance_tick = 0U;
+static uint32_t s_last_health_uptime_ms = 0U;
+#if APP_WATCHDOG_TEST_ENABLE
+static uint32_t s_watchdog_start_tick = 0U;
+#endif
 
 static void AppMain_FlashLed(uint8_t count, uint32_t delay_ms)
 {
@@ -382,9 +395,82 @@ static void AppMain_ClearLogAndRespond(void)
                             tx_frame.dlc);
 }
 
+static void AppMain_ProcessHealthStatus(
+                const CanProtocolHealthStatus *health_status)
+{
+    uint8_t active_faults;
+    uint8_t new_faults;
+    uint8_t cleared_faults;
+    uint8_t expected_sequence;
+    uint8_t remote_restarted;
+    uint8_t abnormal_reset;
+
+    active_faults = health_status->status_flags &
+                    CAN_HEALTH_ACTIVE_FAULT_MASK;
+    remote_restarted = 0U;
+    abnormal_reset = ((health_status->reset_cause ==
+                       CAN_HEALTH_RESET_CAUSE_IWDG) ||
+                      (health_status->reset_cause ==
+                       CAN_HEALTH_RESET_CAUSE_WWDG)) ? 1U : 0U;
+
+    if(s_health_status_received != 0U)
+    {
+        expected_sequence = (uint8_t)(s_last_health_sequence + 1U);
+
+        /* 有符号差值可正确区分节点重启和 32 位毫秒计数自然回绕。 */
+        if((int32_t)(health_status->uptime_ms -
+                     s_last_health_uptime_ms) < 0)
+        {
+            remote_restarted = 1U;
+        }
+
+        if((remote_restarted == 0U) &&
+           (health_status->diagnostic_sequence != expected_sequence))
+        {
+            AppMain_LogEvent(EVENT_LOG_TYPE_DIAG_SEQUENCE_GAP,
+                             expected_sequence,
+                             health_status->diagnostic_sequence);
+        }
+    }
+
+    new_faults = active_faults &
+                 (uint8_t)(~s_last_health_fault_flags);
+    cleared_faults = s_last_health_fault_flags &
+                     (uint8_t)(~active_faults);
+
+    if(new_faults != 0U)
+    {
+        AppMain_LogEvent(EVENT_LOG_TYPE_DIAG_FAULT_SET,
+                         new_faults,
+                         health_status->can_last_error);
+    }
+
+    if(cleared_faults != 0U)
+    {
+        AppMain_LogEvent(EVENT_LOG_TYPE_DIAG_FAULT_CLEARED,
+                         cleared_faults,
+                         active_faults);
+    }
+
+    if((abnormal_reset != 0U) &&
+       ((s_health_status_received == 0U) ||
+        (remote_restarted != 0U)))
+    {
+        AppMain_LogEvent(EVENT_LOG_TYPE_REMOTE_RESET,
+                         health_status->reset_cause,
+                         health_status->diagnostic_sequence);
+    }
+
+    s_health_status_received = 1U;
+    s_last_health_fault_flags = active_faults;
+    s_last_health_sequence = health_status->diagnostic_sequence;
+    s_last_health_uptime_ms = health_status->uptime_ms;
+}
+
 static void AppMain_ProcessCanRx(void)
 {
     CanProtocolFrame rx_frame;
+    CanProtocolHealthStatus health_status;
     uint16_t rx_id;
     uint8_t rx_data[CAN_PROTOCOL_DLC];
     uint8_t rx_dlc;
@@ -491,6 +577,11 @@ static void AppMain_ProcessCanRx(void)
                                   park_distance_valid,
                                   park_distance_mm);
         }
+        else if(CanProtocol_ParseHealthStatus(&rx_frame,
+                                              &health_status))
+        {
+            AppMain_ProcessHealthStatus(&health_status);
+        }
         else if(CanProtocol_IsLogClearRequest(&rx_frame))
         {
             AppMain_ClearLogAndRespond();
@@ -512,12 +603,13 @@ void AppMain_Init(void)
     uint16_t stored_event_count;
 #endif
 
+    BspReset_Init();
     Ui_Init();
 
     BspButton_Init();
     BodyControl_Init();
 
-    Ui_ShowBootSelfTest();
+    Ui_ShowBootSelfTest(BspReset_GetCause());
 
     /* 板载 LED 自检 */
     AppMain_FlashLed(3U, 150U);
@@ -538,7 +630,8 @@ void AppMain_Init(void)
                    CAN_ID_HEARTBEAT,
                    CAN_ID_LIGHT_STATUS,
                    CAN_ID_LOG_REQUEST,
-                   CAN_ID_PARK_DISTANCE) != HAL_OK)
+                   CAN_ID_PARK_DISTANCE,
+                   CAN_ID_HEALTH_STATUS) != HAL_OK)
     {
         AppMain_FlashLed(1U, 400U);
     }
@@ -590,7 +683,9 @@ void AppMain_Init(void)
         if(EventLog_Init() == HAL_OK)
         {
             s_event_log_ready = 1U;
-            AppMain_LogEvent(EVENT_LOG_TYPE_BOOT, 0U, 0U);
+            AppMain_LogEvent(EVENT_LOG_TYPE_BOOT,
+                             (uint8_t)BspReset_GetCause(),
+                             0U);
         }
 
         if(s_event_log_ready != 0U)
@@ -615,6 +710,13 @@ void AppMain_Init(void)
     Ui_InitDashboard();
     Ui_ShowStatus(BodyControl_GetState());
     Ui_UpdateParkDistance(0U, 0U, 0U);
+
+    /* 启动、自检和 Flash 扫描全部完成后再启动看门狗。 */
+#if APP_WATCHDOG_TEST_ENABLE
+    s_watchdog_start_tick = HAL_GetTick();
+#endif
+    BspWatchdog_Init();
+    BspWatchdog_Feed();
 }
 
 void AppMain_Run(void)
@@ -657,5 +759,16 @@ void AppMain_Run(void)
         s_park_distance_received = 0U;
         Ui_UpdateParkDistance(1U, 0U, 0U);
     }
+
+#if APP_WATCHDOG_TEST_ENABLE
+    /* 正常运行 5 秒后故意停止喂狗，约 4 秒后应自动复位。 */
+    if((HAL_GetTick() - s_watchdog_start_tick) <
+       APP_WATCHDOG_TEST_RUN_MS)
+    {
+        BspWatchdog_Feed();
+    }
+#else
+    BspWatchdog_Feed();
+#endif
 }
 

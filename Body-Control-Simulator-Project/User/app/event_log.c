@@ -180,7 +180,7 @@ HAL_StatusTypeDef EventLog_Append(EventLogType type,
 
     if((s_initialized == 0U) ||
        ((uint8_t)type < (uint8_t)EVENT_LOG_TYPE_BOOT) ||
-       ((uint8_t)type > (uint8_t)EVENT_LOG_TYPE_LIGHT_TIMEOUT))
+       ((uint8_t)type > (uint8_t)EVENT_LOG_TYPE_DIAG_SEQUENCE_GAP))
     {
         return HAL_ERROR;
     }

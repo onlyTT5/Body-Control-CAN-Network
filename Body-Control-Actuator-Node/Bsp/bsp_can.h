@@ -14,4 +14,6 @@ uint8_t BspCan_ReceiveStdData(uint16_t *std_id,
                               uint8_t *dlc);
 
 uint8_t BspCan_SetRxStdDataFilter(uint16_t std_id);
+
+uint32_t BspCan_GetErrorStatus(void);
 #endif
