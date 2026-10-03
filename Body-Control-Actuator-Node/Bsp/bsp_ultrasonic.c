@@ -13,6 +13,7 @@
 #define BSP_ULTRASONIC_ECHO_TIMEOUT_MS      40U
 #define BSP_ULTRASONIC_MIN_ECHO_US          100U
 #define BSP_ULTRASONIC_MAX_ECHO_US          30000U
+#define BSP_ULTRASONIC_MEDIAN_FILTER_SIZE   5U
 
 static volatile uint8_t s_measurement_state = BSP_ULTRASONIC_STATE_IDLE;
 static volatile uint8_t s_result_ready = 0U;
@@ -20,6 +21,60 @@ static volatile uint8_t s_result_valid = 0U;
 static volatile uint16_t s_rising_capture = 0U;
 static volatile uint16_t s_distance_mm = 0U;
 static uint32_t s_measurement_start_tick = 0U;
+static uint16_t s_distance_filter_samples[
+                    BSP_ULTRASONIC_MEDIAN_FILTER_SIZE];
+static uint8_t s_distance_filter_count = 0U;
+static uint8_t s_distance_filter_write_index = 0U;
+
+static uint16_t BspUltrasonic_FilterDistance(uint16_t distance_mm)
+{
+    uint16_t sorted_samples[BSP_ULTRASONIC_MEDIAN_FILTER_SIZE];
+    uint16_t value;
+    uint8_t i;
+    uint8_t j;
+
+    s_distance_filter_samples[s_distance_filter_write_index] = distance_mm;
+    s_distance_filter_write_index++;
+
+    if(s_distance_filter_write_index >=
+       BSP_ULTRASONIC_MEDIAN_FILTER_SIZE)
+    {
+        s_distance_filter_write_index = 0U;
+    }
+
+    if(s_distance_filter_count < BSP_ULTRASONIC_MEDIAN_FILTER_SIZE)
+    {
+        s_distance_filter_count++;
+
+        /* 窗口未填满时保持即时输出，避免启动后等待 5 次测量。 */
+        if(s_distance_filter_count < BSP_ULTRASONIC_MEDIAN_FILTER_SIZE)
+        {
+            return distance_mm;
+        }
+    }
+
+    for(i = 0U; i < BSP_ULTRASONIC_MEDIAN_FILTER_SIZE; i++)
+    {
+        sorted_samples[i] = s_distance_filter_samples[i];
+    }
+
+    /* 对 5 个元素执行插入排序，第三个元素就是中值。 */
+    for(i = 1U; i < BSP_ULTRASONIC_MEDIAN_FILTER_SIZE; i++)
+    {
+        value = sorted_samples[i];
+        j = i;
+
+        while((j > 0U) && (sorted_samples[j - 1U] > value))
+        {
+            sorted_samples[j] = sorted_samples[j - 1U];
+            j--;
+        }
+
+        sorted_samples[j] = value;
+    }
+
+    return sorted_samples[BSP_ULTRASONIC_MEDIAN_FILTER_SIZE / 2U];
+}
 
 static void BspUltrasonic_SetCapturePolarity(uint16_t polarity)
 {
@@ -137,8 +192,17 @@ uint8_t BspUltrasonic_GetResult(uint16_t *distance_mm,
         return 0U;
     }
 
-    *distance_mm = s_distance_mm;
     *valid = s_result_valid;
+
+    if(s_result_valid != 0U)
+    {
+        *distance_mm = BspUltrasonic_FilterDistance(s_distance_mm);
+    }
+    else
+    {
+        *distance_mm = s_distance_mm;
+    }
+
     s_result_ready = 0U;
 
     return 1U;
