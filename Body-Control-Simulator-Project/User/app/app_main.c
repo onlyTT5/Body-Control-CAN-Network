@@ -8,6 +8,8 @@
 #include "bsp_flash.h"
 #include "bsp_reset.h"
 #include "bsp_watchdog.h"
+#include "dtc_manager.h"
+#include "dtc_storage.h"
 #include "event_log.h"
 
 #define APP_CAN_PROTOCOL_SELF_TEST_ENABLE 0U
@@ -30,13 +32,17 @@ static uint8_t s_pending_light_on = 0U;
 static uint8_t s_light_retry_count = 0U;
 static uint8_t s_last_needs_sync = 0U;
 static uint8_t s_event_log_ready = 0U;
+static uint8_t s_dtc_storage_ready = 0U;
 static uint8_t s_park_distance_received = 0U;
+static uint8_t s_last_park_distance_valid = 0U;
 static uint8_t s_health_status_received = 0U;
 static uint8_t s_last_health_fault_flags = 0U;
 static uint8_t s_last_health_sequence = 0U;
 static uint32_t s_last_light_send_tick = 0U;
 static uint32_t s_last_park_distance_tick = 0U;
 static uint32_t s_last_health_uptime_ms = 0U;
+static uint16_t s_last_park_distance_mm = 0xFFFFU;
+static CanProtocolHealthStatus s_last_health_status;
 #if APP_WATCHDOG_TEST_ENABLE
 static uint32_t s_watchdog_start_tick = 0U;
 #endif
@@ -395,6 +401,84 @@ static void AppMain_ClearLogAndRespond(void)
                             tx_frame.dlc);
 }
 
+static void AppMain_CaptureDtcFreezeFrame(
+                DtcCode code,
+                const CanProtocolHealthStatus *health_status)
+{
+    DtcFreezeFrame freeze_frame;
+
+    freeze_frame.health_flags = 0U;
+    freeze_frame.can_last_error = 0U;
+    freeze_frame.reset_cause = 0U;
+    freeze_frame.remote_uptime_ms = 0U;
+
+    if(health_status != 0)
+    {
+        freeze_frame.health_flags = health_status->status_flags;
+        freeze_frame.can_last_error = health_status->can_last_error;
+        freeze_frame.reset_cause = health_status->reset_cause;
+        freeze_frame.remote_uptime_ms = health_status->uptime_ms;
+    }
+    else if(s_health_status_received != 0U)
+    {
+        freeze_frame.health_flags = s_last_health_status.status_flags;
+        freeze_frame.can_last_error = s_last_health_status.can_last_error;
+        freeze_frame.reset_cause = s_last_health_status.reset_cause;
+        freeze_frame.remote_uptime_ms = s_last_health_status.uptime_ms;
+    }
+
+    freeze_frame.distance_valid = s_last_park_distance_valid;
+    freeze_frame.distance_mm = (s_last_park_distance_valid != 0U) ?
+                               s_last_park_distance_mm : 0xFFFFU;
+    freeze_frame.local_timestamp_ms = HAL_GetTick();
+
+    DtcManager_CaptureFreezeFrame(code, &freeze_frame);
+
+    if((s_dtc_storage_ready != 0U) &&
+       (DtcStorage_Save() != HAL_OK))
+    {
+        /* 写入失败后本次运行停止持久化，RAM 中的诊断仍继续工作。 */
+        s_dtc_storage_ready = 0U;
+    }
+
+    Ui_UpdateDtcStatus(DtcManager_GetActiveCount(),
+                       DtcManager_GetStoredCount());
+}
+
+static void AppMain_UpdateHealthDtc(
+                DtcCode code,
+                uint8_t condition_failed,
+                const CanProtocolHealthStatus *health_status)
+{
+    DtcTransition transition;
+
+    transition = DtcManager_UpdateCondition(code, condition_failed);
+
+    if(transition == DTC_TRANSITION_ACTIVATED)
+    {
+        AppMain_CaptureDtcFreezeFrame(code, health_status);
+    }
+    else if(transition == DTC_TRANSITION_RECOVERED)
+    {
+        Ui_UpdateDtcStatus(DtcManager_GetActiveCount(),
+                           DtcManager_GetStoredCount());
+    }
+}
+
+static uint16_t AppMain_MillisecondsToSeconds(uint32_t milliseconds)
+{
+    uint32_t seconds;
+
+    seconds = milliseconds / 1000U;
+
+    if(seconds > 0xFFFFU)
+    {
+        return 0xFFFFU;
+    }
+
+    return (uint16_t)seconds;
+}
+
 static void AppMain_ProcessHealthStatus(
                 const CanProtocolHealthStatus *health_status)
 {
@@ -412,6 +496,24 @@ static void AppMain_ProcessHealthStatus(
                        CAN_HEALTH_RESET_CAUSE_IWDG) ||
                       (health_status->reset_cause ==
                        CAN_HEALTH_RESET_CAUSE_WWDG)) ? 1U : 0U;
+
+    AppMain_UpdateHealthDtc(
+        DTC_CODE_ULTRASONIC_INVALID,
+        ((active_faults & CAN_HEALTH_ULTRASONIC_INVALID_MASK) != 0U) ?
+        1U : 0U,
+        health_status);
+    AppMain_UpdateHealthDtc(
+        DTC_CODE_CAN_WARNING,
+        ((active_faults & CAN_HEALTH_CAN_WARNING_MASK) != 0U) ? 1U : 0U,
+        health_status);
+    AppMain_UpdateHealthDtc(
+        DTC_CODE_CAN_PASSIVE,
+        ((active_faults & CAN_HEALTH_CAN_PASSIVE_MASK) != 0U) ? 1U : 0U,
+        health_status);
+    AppMain_UpdateHealthDtc(
+        DTC_CODE_CAN_BUS_OFF,
+        ((active_faults & CAN_HEALTH_CAN_BUS_OFF_MASK) != 0U) ? 1U : 0U,
+        health_status);
 
     if(s_health_status_received != 0U)
     {
@@ -456,6 +558,11 @@ static void AppMain_ProcessHealthStatus(
        ((s_health_status_received == 0U) ||
         (remote_restarted != 0U)))
     {
+        DtcManager_RecordHistoricalEvent(
+            DTC_CODE_NODE_B_WATCHDOG_RESET);
+        AppMain_CaptureDtcFreezeFrame(
+            DTC_CODE_NODE_B_WATCHDOG_RESET,
+            health_status);
         AppMain_LogEvent(EVENT_LOG_TYPE_REMOTE_RESET,
                          health_status->reset_cause,
                          health_status->diagnostic_sequence);
@@ -465,6 +572,147 @@ static void AppMain_ProcessHealthStatus(
     s_last_health_fault_flags = active_faults;
     s_last_health_sequence = health_status->diagnostic_sequence;
     s_last_health_uptime_ms = health_status->uptime_ms;
+    s_last_health_status = *health_status;
+}
+
+static void AppMain_SendDtcResponse(uint8_t selector)
+{
+    CanProtocolFrame tx_frame;
+    DtcStatus dtc_status;
+    DtcFreezeFrame freeze_frame;
+    DtcCode dtc_code;
+    uint8_t detail_query_valid;
+
+    detail_query_valid = 0U;
+
+    if(selector == CAN_DTC_QUERY_SUMMARY)
+    {
+        CanProtocol_BuildDtcSummary(&tx_frame,
+                                    DtcManager_GetActiveMask(),
+                                    DtcManager_GetStoredMask(),
+                                    DtcManager_GetActiveCount(),
+                                    DtcManager_GetStoredCount());
+    }
+    else if(selector <= (uint8_t)DTC_CODE_COUNT)
+    {
+        dtc_code = (DtcCode)(selector - 1U);
+
+        if(DtcManager_GetStatus(dtc_code, &dtc_status) != 0U)
+        {
+            detail_query_valid = 1U;
+            CanProtocol_BuildDtcDetail(&tx_frame,
+                                       CAN_DTC_STATUS_OK,
+                                       selector,
+                                       dtc_status.active,
+                                       dtc_status.stored,
+                                       dtc_status.failure_count,
+                                       dtc_status.pass_count,
+                                       dtc_status.occurrence_count);
+        }
+        else
+        {
+            CanProtocol_BuildDtcDetail(
+                                       &tx_frame,
+                                       CAN_DTC_STATUS_INVALID_CODE,
+                                       selector,
+                                       0U, 0U, 0U, 0U, 0U);
+        }
+    }
+    else
+    {
+        CanProtocol_BuildDtcDetail(&tx_frame,
+                                   CAN_DTC_STATUS_INVALID_CODE,
+                                   selector,
+                                   0U, 0U, 0U, 0U, 0U);
+    }
+
+    (void)BspCan_SendStdData(tx_frame.std_id,
+                             tx_frame.data,
+                             tx_frame.dlc);
+
+    if(detail_query_valid == 0U)
+    {
+        return;
+    }
+
+    if(DtcManager_GetFreezeFrame(dtc_code, &freeze_frame) == 0U)
+    {
+        CanProtocol_BuildDtcFreezeData(&tx_frame,
+                                       CAN_DTC_STATUS_NO_FREEZE,
+                                       selector,
+                                       0U, 0U, 0U, 0U, 0xFFFFU);
+        (void)BspCan_SendStdData(tx_frame.std_id,
+                                 tx_frame.data,
+                                 tx_frame.dlc);
+        return;
+    }
+
+    CanProtocol_BuildDtcFreezeData(&tx_frame,
+                                   CAN_DTC_STATUS_OK,
+                                   selector,
+                                   freeze_frame.health_flags,
+                                   freeze_frame.can_last_error,
+                                   freeze_frame.reset_cause,
+                                   freeze_frame.distance_valid,
+                                   freeze_frame.distance_mm);
+    (void)BspCan_SendStdData(tx_frame.std_id,
+                             tx_frame.data,
+                             tx_frame.dlc);
+
+    CanProtocol_BuildDtcFreezeTime(
+        &tx_frame,
+        selector,
+        AppMain_MillisecondsToSeconds(freeze_frame.local_timestamp_ms),
+        AppMain_MillisecondsToSeconds(freeze_frame.remote_uptime_ms));
+    (void)BspCan_SendStdData(tx_frame.std_id,
+                             tx_frame.data,
+                             tx_frame.dlc);
+}
+
+static void AppMain_ClearDtcAndRespond(void)
+{
+    CanProtocolFrame tx_frame;
+    uint8_t status;
+
+    status = CAN_DTC_STATUS_OK;
+
+    if(DtcManager_GetActiveCount() != 0U)
+    {
+        /* 当前故障仍存在时拒绝清除，防止掩盖尚未排除的问题。 */
+        status = CAN_DTC_STATUS_ACTIVE_FAULT;
+    }
+    else if(s_dtc_storage_ready == 0U)
+    {
+        status = CAN_DTC_STATUS_STORAGE_ERROR;
+    }
+    else
+    {
+        /* 扇区擦除最长约 2 秒，开始前刷新看门狗。 */
+        BspWatchdog_Feed();
+
+        if(DtcStorage_Clear() == HAL_OK)
+        {
+            DtcManager_ClearHistory();
+            Ui_UpdateDtcStatus(DtcManager_GetActiveCount(),
+                               DtcManager_GetStoredCount());
+        }
+        else
+        {
+            s_dtc_storage_ready = 0U;
+            status = CAN_DTC_STATUS_STORAGE_ERROR;
+        }
+    }
+
+    CanProtocol_BuildDtcClearResponse(
+        &tx_frame,
+        status,
+        DtcManager_GetActiveMask(),
+        DtcManager_GetStoredMask(),
+        DtcManager_GetActiveCount(),
+        DtcManager_GetStoredCount());
+    (void)BspCan_SendStdData(tx_frame.std_id,
+                             tx_frame.data,
+                             tx_frame.dlc);
 }
 
 static void AppMain_ProcessCanRx(void)
@@ -485,6 +733,7 @@ static void AppMain_ProcessCanRx(void)
     uint8_t log_newest_offset;
     uint8_t park_distance_valid;
     uint8_t park_measurement_sequence;
+    uint8_t dtc_selector;
     uint16_t park_distance_mm;
 
     while(BspCan_ReceiveStdData(&rx_id, rx_data, &rx_dlc))
@@ -527,6 +776,7 @@ static void AppMain_ProcessCanRx(void)
                                 (s_last_needs_sync == 0U)) ? 1U : 0U;
 
             BodyControl_OnCanHeartbeat(heartbeat_sequence, new_sync_request);
+            AppMain_UpdateHealthDtc(DTC_CODE_NODE_B_OFFLINE, 0U, 0);
             Ui_UpdateCanStatus(BodyControl_GetState());
 
             if(was_online == 0U)
@@ -572,6 +822,9 @@ static void AppMain_ProcessCanRx(void)
                     &park_measurement_sequence))
         {
             s_park_distance_received = 1U;
+            s_last_park_distance_valid = park_distance_valid;
+            s_last_park_distance_mm = (park_distance_valid != 0U) ?
+                                      park_distance_mm : 0xFFFFU;
             s_last_park_distance_tick = HAL_GetTick();
             Ui_UpdateParkDistance(1U,
                                   park_distance_valid,
@@ -581,6 +834,14 @@ static void AppMain_ProcessCanRx(void)
                                               &health_status))
         {
             AppMain_ProcessHealthStatus(&health_status);
+        }
+        else if(CanProtocol_IsDtcClearRequest(&rx_frame))
+        {
+            AppMain_ClearDtcAndRespond();
+        }
+        else if(CanProtocol_ParseDtcRequest(&rx_frame, &dtc_selector))
+        {
+            AppMain_SendDtcResponse(dtc_selector);
         }
         else if(CanProtocol_IsLogClearRequest(&rx_frame))
         {
@@ -608,6 +869,7 @@ void AppMain_Init(void)
 
     BspButton_Init();
     BodyControl_Init();
+    DtcManager_Init();
 
     Ui_ShowBootSelfTest(BspReset_GetCause());
 
@@ -631,7 +893,8 @@ void AppMain_Init(void)
                    CAN_ID_LIGHT_STATUS,
                    CAN_ID_LOG_REQUEST,
                    CAN_ID_PARK_DISTANCE,
-                   CAN_ID_HEALTH_STATUS) != HAL_OK)
+                   CAN_ID_HEALTH_STATUS,
+                   CAN_ID_DTC_REQUEST) != HAL_OK)
     {
         AppMain_FlashLed(1U, 400U);
     }
@@ -680,6 +943,16 @@ void AppMain_Init(void)
 
     if(flash_detected != 0U)
     {
+        if(DtcStorage_Init() == HAL_OK)
+        {
+            s_dtc_storage_ready = 1U;
+        }
+        else
+        {
+            /* DTC 扇区扫描失败：慢闪 5 次，RAM 诊断仍可运行。 */
+            AppMain_FlashLed(5U, 400U);
+        }
+
         if(EventLog_Init() == HAL_OK)
         {
             s_event_log_ready = 1U;
@@ -710,6 +983,8 @@ void AppMain_Init(void)
     Ui_InitDashboard();
     Ui_ShowStatus(BodyControl_GetState());
     Ui_UpdateParkDistance(0U, 0U, 0U);
+    Ui_UpdateDtcStatus(DtcManager_GetActiveCount(),
+                       DtcManager_GetStoredCount());
 
     /* 启动、自检和 Flash 扫描全部完成后再启动看门狗。 */
 #if APP_WATCHDOG_TEST_ENABLE
@@ -739,6 +1014,9 @@ void AppMain_Run(void)
     {
         s_light_command_pending = 0U;
         s_last_needs_sync = 0U;
+
+        AppMain_UpdateHealthDtc(DTC_CODE_NODE_B_OFFLINE, 1U, 0);
+
         AppMain_LogEvent(EVENT_LOG_TYPE_CAN_OFFLINE, 0U, 0U);
         Ui_UpdateCanStatus(BodyControl_GetState());
         Ui_UpdateActuatorLight(BodyControl_GetState());
@@ -757,6 +1035,8 @@ void AppMain_Run(void)
         APP_PARK_DISTANCE_TIMEOUT_MS))
     {
         s_park_distance_received = 0U;
+        s_last_park_distance_valid = 0U;
+        s_last_park_distance_mm = 0xFFFFU;
         Ui_UpdateParkDistance(1U, 0U, 0U);
     }
 

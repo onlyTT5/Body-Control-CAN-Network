@@ -259,3 +259,161 @@ void CanProtocol_BuildLogDetail(CanProtocolFrame *frame,
     frame->data[6] = (uint8_t)(timestamp_ms >> 16);
     frame->data[7] = (uint8_t)(timestamp_ms >> 24);
 }
+
+uint8_t CanProtocol_ParseDtcRequest(const CanProtocolFrame *frame,
+                                    uint8_t *selector)
+{
+    if((frame == NULL) || (selector == NULL))
+    {
+        return 0U;
+    }
+
+    if((frame->std_id != CAN_ID_DTC_REQUEST) ||
+       (frame->dlc != CAN_PROTOCOL_DLC))
+    {
+        return 0U;
+    }
+
+    *selector = frame->data[0];
+    return 1U;
+}
+
+uint8_t CanProtocol_IsDtcClearRequest(const CanProtocolFrame *frame)
+{
+    if((frame == NULL) ||
+       (frame->std_id != CAN_ID_DTC_REQUEST) ||
+       (frame->dlc != CAN_PROTOCOL_DLC))
+    {
+        return 0U;
+    }
+
+    return ((frame->data[0] == CAN_DTC_COMMAND_CLEAR) &&
+            (frame->data[1] == 0x43U) &&
+            (frame->data[2] == 0x4CU) &&
+            (frame->data[3] == 0x52U) &&
+            (frame->data[4] == 0xA5U) &&
+            (frame->data[5] == 0x5AU) &&
+            (frame->data[6] == 0U) &&
+            (frame->data[7] == 0U)) ? 1U : 0U;
+}
+
+void CanProtocol_BuildDtcSummary(CanProtocolFrame *frame,
+                                 uint16_t active_mask,
+                                 uint16_t stored_mask,
+                                 uint8_t active_count,
+                                 uint8_t stored_count)
+{
+    if(frame == NULL)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_DTC_RESPONSE;
+    frame->dlc = CAN_PROTOCOL_DLC;
+    frame->data[0] = CAN_DTC_STATUS_OK;
+    frame->data[1] = CAN_DTC_QUERY_SUMMARY;
+    frame->data[2] = (uint8_t)active_mask;
+    frame->data[3] = (uint8_t)(active_mask >> 8);
+    frame->data[4] = (uint8_t)stored_mask;
+    frame->data[5] = (uint8_t)(stored_mask >> 8);
+    frame->data[6] = active_count;
+    frame->data[7] = stored_count;
+}
+
+void CanProtocol_BuildDtcClearResponse(CanProtocolFrame *frame,
+                                       uint8_t status,
+                                       uint16_t active_mask,
+                                       uint16_t stored_mask,
+                                       uint8_t active_count,
+                                       uint8_t stored_count)
+{
+    if(frame == NULL)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_DTC_RESPONSE;
+    frame->dlc = CAN_PROTOCOL_DLC;
+    frame->data[0] = status;
+    frame->data[1] = CAN_DTC_COMMAND_CLEAR;
+    frame->data[2] = (uint8_t)active_mask;
+    frame->data[3] = (uint8_t)(active_mask >> 8);
+    frame->data[4] = (uint8_t)stored_mask;
+    frame->data[5] = (uint8_t)(stored_mask >> 8);
+    frame->data[6] = active_count;
+    frame->data[7] = stored_count;
+}
+
+void CanProtocol_BuildDtcDetail(CanProtocolFrame *frame,
+                                uint8_t status,
+                                uint8_t dtc_code,
+                                uint8_t active,
+                                uint8_t stored,
+                                uint8_t failure_count,
+                                uint8_t pass_count,
+                                uint16_t occurrence_count)
+{
+    if(frame == NULL)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_DTC_RESPONSE;
+    frame->dlc = CAN_PROTOCOL_DLC;
+    frame->data[0] = status;
+    frame->data[1] = dtc_code;
+    frame->data[2] = active;
+    frame->data[3] = stored;
+    frame->data[4] = failure_count;
+    frame->data[5] = pass_count;
+    frame->data[6] = (uint8_t)occurrence_count;
+    frame->data[7] = (uint8_t)(occurrence_count >> 8);
+}
+
+void CanProtocol_BuildDtcFreezeData(CanProtocolFrame *frame,
+                                    uint8_t status,
+                                    uint8_t dtc_code,
+                                    uint8_t health_flags,
+                                    uint8_t can_last_error,
+                                    uint8_t reset_cause,
+                                    uint8_t distance_valid,
+                                    uint16_t distance_mm)
+{
+    if(frame == NULL)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_DTC_FREEZE_DATA;
+    frame->dlc = CAN_PROTOCOL_DLC;
+    frame->data[0] = status;
+    frame->data[1] = dtc_code;
+    frame->data[2] = health_flags;
+    frame->data[3] = can_last_error;
+    frame->data[4] = reset_cause;
+    frame->data[5] = distance_valid;
+    frame->data[6] = (uint8_t)distance_mm;
+    frame->data[7] = (uint8_t)(distance_mm >> 8);
+}
+
+void CanProtocol_BuildDtcFreezeTime(CanProtocolFrame *frame,
+                                    uint8_t dtc_code,
+                                    uint16_t local_timestamp_s,
+                                    uint16_t remote_uptime_s)
+{
+    if(frame == NULL)
+    {
+        return;
+    }
+
+    frame->std_id = CAN_ID_DTC_FREEZE_TIME;
+    frame->dlc = CAN_PROTOCOL_DLC;
+    frame->data[0] = CAN_DTC_STATUS_OK;
+    frame->data[1] = dtc_code;
+    frame->data[2] = (uint8_t)local_timestamp_s;
+    frame->data[3] = (uint8_t)(local_timestamp_s >> 8);
+    frame->data[4] = (uint8_t)remote_uptime_s;
+    frame->data[5] = (uint8_t)(remote_uptime_s >> 8);
+    frame->data[6] = 0U;
+    frame->data[7] = 0U;
+}

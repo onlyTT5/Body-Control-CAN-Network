@@ -5,7 +5,8 @@ HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
 							  uint16_t filter_id2,
                               uint16_t filter_id3,
                               uint16_t filter_id4,
-                              uint16_t filter_id5)
+                              uint16_t filter_id5,
+                              uint16_t filter_id6)
 {
     CAN_FilterTypeDef filter_config;
 
@@ -14,7 +15,8 @@ HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
     (filter_id2 > 0x7FFU) ||
     (filter_id3 > 0x7FFU) ||
     (filter_id4 > 0x7FFU) ||
-    (filter_id5 > 0x7FFU))
+    (filter_id5 > 0x7FFU) ||
+    (filter_id6 > 0x7FFU))
     {
         return HAL_ERROR;
     }
@@ -50,6 +52,18 @@ HAL_StatusTypeDef BspCan_Init(uint16_t filter_id0,
     filter_config.FilterMaskIdHigh = (uint16_t)(filter_id4 << 5);
     filter_config.FilterMaskIdLow = (uint16_t)(filter_id5 << 5);
     filter_config.FilterBank = 1U;
+
+    if (HAL_CAN_ConfigFilter(&hcan, &filter_config) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    /* 第三组的四个槽位均接收 DTC 查询请求。 */
+    filter_config.FilterIdHigh = (uint16_t)(filter_id6 << 5);
+    filter_config.FilterIdLow = (uint16_t)(filter_id6 << 5);
+    filter_config.FilterMaskIdHigh = (uint16_t)(filter_id6 << 5);
+    filter_config.FilterMaskIdLow = (uint16_t)(filter_id6 << 5);
+    filter_config.FilterBank = 2U;
 
     if (HAL_CAN_ConfigFilter(&hcan, &filter_config) != HAL_OK)
     {

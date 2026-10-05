@@ -11,6 +11,7 @@ void Ui_ShowStatus(const BodyControlState *state);
 void Ui_UpdateLight(const BodyControlState *state);
 void Ui_UpdateHeartbeat(const BodyControlState *state);
 void Ui_UpdateCanStatus(const BodyControlState *state);
+void Ui_UpdateDtcStatus(uint8_t active_count, uint8_t stored_count);
 void Ui_UpdateActuatorLight(const BodyControlState *state);
 void Ui_UpdateParkDistance(uint8_t received,
                            uint8_t valid,

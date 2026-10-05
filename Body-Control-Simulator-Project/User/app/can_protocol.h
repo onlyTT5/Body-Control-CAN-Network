@@ -19,10 +19,22 @@
 #define CAN_ID_LOG_DETAIL    0x105U
 #define CAN_ID_PARK_DISTANCE 0x111U
 #define CAN_ID_HEALTH_STATUS 0x114U
+#define CAN_ID_DTC_REQUEST   0x115U
+#define CAN_ID_DTC_RESPONSE  0x116U
+#define CAN_ID_DTC_FREEZE_DATA 0x117U
+#define CAN_ID_DTC_FREEZE_TIME 0x118U
 
 #define CAN_LOG_STATUS_OK          0U
 #define CAN_LOG_STATUS_NOT_FOUND   1U
 #define CAN_LOG_STATUS_READ_ERROR  2U
+
+#define CAN_DTC_QUERY_SUMMARY        0U
+#define CAN_DTC_COMMAND_CLEAR        0xFFU
+#define CAN_DTC_STATUS_OK            0U
+#define CAN_DTC_STATUS_INVALID_CODE  1U
+#define CAN_DTC_STATUS_NO_FREEZE     2U
+#define CAN_DTC_STATUS_ACTIVE_FAULT  3U
+#define CAN_DTC_STATUS_STORAGE_ERROR 4U
 
 #define CAN_HEARTBEAT_NEEDS_SYNC_MASK  0x01U
 #define CAN_PARK_DISTANCE_VALID_MASK   0x01U
@@ -99,5 +111,46 @@ void CanProtocol_BuildLogSummary(CanProtocolFrame *frame,
 void CanProtocol_BuildLogDetail(CanProtocolFrame *frame,
                                 uint32_t sequence,
                                 uint32_t timestamp_ms);
+
+uint8_t CanProtocol_ParseDtcRequest(const CanProtocolFrame *frame,
+                                    uint8_t *selector);
+
+uint8_t CanProtocol_IsDtcClearRequest(const CanProtocolFrame *frame);
+
+void CanProtocol_BuildDtcSummary(CanProtocolFrame *frame,
+                                 uint16_t active_mask,
+                                 uint16_t stored_mask,
+                                 uint8_t active_count,
+                                 uint8_t stored_count);
+
+void CanProtocol_BuildDtcClearResponse(CanProtocolFrame *frame,
+                                       uint8_t status,
+                                       uint16_t active_mask,
+                                       uint16_t stored_mask,
+                                       uint8_t active_count,
+                                       uint8_t stored_count);
+
+void CanProtocol_BuildDtcDetail(CanProtocolFrame *frame,
+                                uint8_t status,
+                                uint8_t dtc_code,
+                                uint8_t active,
+                                uint8_t stored,
+                                uint8_t failure_count,
+                                uint8_t pass_count,
+                                uint16_t occurrence_count);
+
+void CanProtocol_BuildDtcFreezeData(CanProtocolFrame *frame,
+                                    uint8_t status,
+                                    uint8_t dtc_code,
+                                    uint8_t health_flags,
+                                    uint8_t can_last_error,
+                                    uint8_t reset_cause,
+                                    uint8_t distance_valid,
+                                    uint16_t distance_mm);
+
+void CanProtocol_BuildDtcFreezeTime(CanProtocolFrame *frame,
+                                    uint8_t dtc_code,
+                                    uint16_t local_timestamp_s,
+                                    uint16_t remote_uptime_s);
 
 #endif

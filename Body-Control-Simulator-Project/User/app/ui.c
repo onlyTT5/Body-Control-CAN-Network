@@ -1,6 +1,45 @@
 #include "ui.h"
 #include "oled.h"
 
+static uint8_t s_can_online = 0U;
+static uint8_t s_dtc_active_count = 0U;
+static uint8_t s_dtc_stored_count = 0U;
+
+static void Ui_DrawCanAndDtcStatus(void)
+{
+    char line[17];
+
+    line[0] = 'C';
+    line[1] = 'A';
+    line[2] = 'N';
+    line[3] = ':';
+    line[4] = 'O';
+
+    if(s_can_online != 0U)
+    {
+        line[5] = 'N';
+        line[6] = ' ';
+    }
+    else
+    {
+        line[5] = 'F';
+        line[6] = 'F';
+    }
+
+    line[7] = ' ';
+    line[8] = 'D';
+    line[9] = 'T';
+    line[10] = 'C';
+    line[11] = ':';
+    line[12] = 'A';
+    line[13] = (char)('0' + (s_dtc_active_count % 10U));
+    line[14] = 'H';
+    line[15] = (char)('0' + (s_dtc_stored_count % 10U));
+    line[16] = '\0';
+
+    OLED_ShowString(2, 4, line);
+}
+
 void Ui_Init(void)
 {
     OLED_Init();
@@ -10,7 +49,7 @@ void Ui_ShowBootSelfTest(BspResetCause reset_cause)
 {
     OLED_Clear();
 
-    OLED_ShowString(0, 10, "BODY CONTROL V0.6");
+    OLED_ShowString(0, 10, "BODY CONTROL V0.7");
     OLED_ShowString(2, 20, "OLED: ON");
 
     if(reset_cause == BSP_RESET_CAUSE_POWER)
@@ -50,9 +89,13 @@ void Ui_InitDashboard(void)
 {
     OLED_Clear();
 
+    s_can_online = 0U;
+    s_dtc_active_count = 0U;
+    s_dtc_stored_count = 0U;
+
     /* 固定内容：不需要重复刷新 */
     OLED_ShowString(0, 20, "PARK: WAIT        ");
-    OLED_ShowString(2, 20, "CAN: OFFLINE");
+    Ui_DrawCanAndDtcStatus();
 }
 
 /* 只刷新灯光状态这一行 */
@@ -92,14 +135,15 @@ void Ui_ShowStatus(const BodyControlState *state)
 
 void Ui_UpdateCanStatus(const BodyControlState *state)
 {
-    if (state->can_online)
-    {
-        OLED_ShowString(2, 20, "CAN: ONLINE ");
-    }
-    else
-    {
-        OLED_ShowString(2, 20, "CAN: OFFLINE");
-    }
+    s_can_online = (state->can_online != 0U) ? 1U : 0U;
+    Ui_DrawCanAndDtcStatus();
+}
+
+void Ui_UpdateDtcStatus(uint8_t active_count, uint8_t stored_count)
+{
+    s_dtc_active_count = active_count;
+    s_dtc_stored_count = stored_count;
+    Ui_DrawCanAndDtcStatus();
 }
 
 void Ui_UpdateActuatorLight(const BodyControlState *state)

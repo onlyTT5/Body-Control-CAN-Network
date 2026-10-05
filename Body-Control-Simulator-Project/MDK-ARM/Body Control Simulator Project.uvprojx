@@ -849,6 +849,16 @@
               <FileType>1</FileType>
               <FilePath>..\User\app\event_log.c</FilePath>
             </File>
+            <File>
+              <FileName>dtc_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\app\dtc_manager.c</FilePath>
+            </File>
+            <File>
+              <FileName>dtc_storage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\app\dtc_storage.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
