@@ -1,5 +1,6 @@
 #include "app_main.h"
 #include "bsp_button.h"
+#include "bsp_encoder.h"
 #include "bsp_led.h"
 #include "body_control.h"
 #include "ui.h"
@@ -669,9 +670,8 @@ static void AppMain_SendDtcResponse(uint8_t selector)
                              tx_frame.dlc);
 }
 
-static void AppMain_ClearDtcAndRespond(void)
+static uint8_t AppMain_ClearDtc(void)
 {
-    CanProtocolFrame tx_frame;
     uint8_t status;
 
     status = CAN_DTC_STATUS_OK;
@@ -702,6 +702,16 @@ static void AppMain_ClearDtcAndRespond(void)
             status = CAN_DTC_STATUS_STORAGE_ERROR;
         }
     }
+
+    return status;
+}
+
+static void AppMain_ClearDtcAndRespond(void)
+{
+    CanProtocolFrame tx_frame;
+    uint8_t status;
+
+    status = AppMain_ClearDtc();
 
     CanProtocol_BuildDtcClearResponse(
         &tx_frame,
@@ -868,6 +878,7 @@ void AppMain_Init(void)
     Ui_Init();
 
     BspButton_Init();
+    BspEncoder_Init();
     BodyControl_Init();
     DtcManager_Init();
 
@@ -996,7 +1007,41 @@ void AppMain_Init(void)
 
 void AppMain_Run(void)
 {
+    BspEncoderEvent encoder_event;
+    BspButtonEvent menu_button_event;
+    uint8_t dtc_clear_status;
+
     AppMain_ProcessCanRx();
+
+    encoder_event = BspEncoder_Poll();
+    if(encoder_event != BSP_ENCODER_EVENT_NONE)
+    {
+        Ui_HandleEncoderEvent(encoder_event);
+    }
+
+    menu_button_event = BspButton_MenuPoll();
+    if(menu_button_event != BSP_BUTTON_EVENT_NONE)
+    {
+        Ui_HandleMenuButtonEvent(menu_button_event);
+    }
+
+    if(Ui_TakeDtcClearRequest() != 0U)
+    {
+        dtc_clear_status = AppMain_ClearDtc();
+
+        if(dtc_clear_status == CAN_DTC_STATUS_OK)
+        {
+            Ui_ShowDtcClearResult(UI_DTC_CLEAR_RESULT_OK);
+        }
+        else if(dtc_clear_status == CAN_DTC_STATUS_ACTIVE_FAULT)
+        {
+            Ui_ShowDtcClearResult(UI_DTC_CLEAR_RESULT_ACTIVE_ERROR);
+        }
+        else
+        {
+            Ui_ShowDtcClearResult(UI_DTC_CLEAR_RESULT_FLASH_ERROR);
+        }
+    }
 
     if(BspButton_LightWasPressed())
     {

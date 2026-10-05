@@ -91,6 +91,9 @@ static const uint8_t *OLED_GetGlyph(char ch)
     static const uint8_t sp[5] = {0, 0, 0, 0, 0};
     static const uint8_t dot[5] = {0, 0x60, 0x60, 0, 0};
     static const uint8_t colon[5] = {0, 0x36, 0x36, 0, 0};
+    static const uint8_t plus[5] = {0x08, 0x08, 0x3E, 0x08, 0x08};
+    static const uint8_t minus[5] = {0x08, 0x08, 0x08, 0x08, 0x08};
+    static const uint8_t slash[5] = {0x20, 0x10, 0x08, 0x04, 0x02};
     static const uint8_t n0[5] = {0x3E, 0x51, 0x49, 0x45, 0x3E};
     static const uint8_t n1[5] = {0, 0x42, 0x7F, 0x40, 0};
 	static const uint8_t n2[5] = {0x42, 0x61, 0x51, 0x49, 0x46};
@@ -107,37 +110,45 @@ static const uint8_t *OLED_GetGlyph(char ch)
     static const uint8_t D[5] = {0x7F, 0x41, 0x41, 0x22, 0x1C};
     static const uint8_t E[5] = {0x7F, 0x49, 0x49, 0x49, 0x41};
     static const uint8_t F[5] = {0x7F, 0x09, 0x09, 0x09, 0x01};
+    static const uint8_t G[5] = {0x3E, 0x41, 0x51, 0x51, 0x32};
+    static const uint8_t H[5] = {0x7F, 0x08, 0x08, 0x08, 0x7F};
     static const uint8_t I[5] = {0, 0x41, 0x7F, 0x41, 0};
+    static const uint8_t J[5] = {0x20, 0x40, 0x41, 0x3F, 0x01};
     static const uint8_t L[5] = {0x7F, 0x40, 0x40, 0x40, 0x40};
     static const uint8_t K[5] = {0x7F, 0x08, 0x14, 0x22, 0x41};
     static const uint8_t M[5] = {0x7F, 0x02, 0x0C, 0x02, 0x7F};
     static const uint8_t N[5] = {0x7F, 0x02, 0x04, 0x08, 0x7F};
     static const uint8_t O[5] = {0x3E, 0x41, 0x41, 0x41, 0x3E};
     static const uint8_t P[5] = {0x7F, 0x09, 0x09, 0x09, 0x06};
+    static const uint8_t Q[5] = {0x3E, 0x41, 0x51, 0x21, 0x5E};
     static const uint8_t R[5] = {0x7F, 0x09, 0x19, 0x29, 0x46};
     static const uint8_t S[5] = {0x46, 0x49, 0x49, 0x49, 0x31};
     static const uint8_t T[5] = {0x01, 0x01, 0x7F, 0x01, 0x01};
+    static const uint8_t U[5] = {0x3F, 0x40, 0x40, 0x40, 0x3F};
     static const uint8_t V[5] = {0x1F, 0x20, 0x40, 0x20, 0x1F};
 	static const uint8_t W[5] = {0x7F, 0x20, 0x18, 0x20, 0x7F};
+    static const uint8_t X[5] = {0x63, 0x14, 0x08, 0x14, 0x63};
     static const uint8_t Y[5] = {0x07, 0x08, 0x70, 0x08, 0x07};
-		static const uint8_t G[5] = {0x3E, 0x41, 0x51, 0x51, 0x32};
-		static const uint8_t H[5] = {0x7F, 0x08, 0x08, 0x08, 0x7F};
+    static const uint8_t Z[5] = {0x61, 0x51, 0x49, 0x45, 0x43};
 
     switch (ch)
     {
         case 'A': return A; case 'B': return B; case 'C': return C;
         case 'D': return D; case 'E': return E; case 'F': return F;
-				case 'G': return G; case 'H': return H;
-        case 'I': return I; case 'K': return K; case 'L': return L;
+        case 'G': return G; case 'H': return H; case 'I': return I;
+        case 'J': return J; case 'K': return K; case 'L': return L;
         case 'M': return M; case 'N': return N; case 'O': return O;
-        case 'P': return P; case 'R': return R; case 'S': return S;
-        case 'T': return T;
-        case 'V': return V; case 'W': return W; case 'Y': return Y;
+        case 'P': return P; case 'Q': return Q; case 'R': return R;
+        case 'S': return S; case 'T': return T; case 'U': return U;
+        case 'V': return V; case 'W': return W; case 'X': return X;
+        case 'Y': return Y; case 'Z': return Z;
         case '0': return n0; case '1': return n1; case '2': return n2;
         case '3': return n3; case '4': return n4; case '5': return n5;
         case '6': return n6; case '7': return n7; case '8': return n8;
         case '9': return n9;
         case '.': return dot; case ':': return colon;
+        case '+': return plus; case '-': return minus;
+        case '/': return slash;
         default: return sp;
     }
 }

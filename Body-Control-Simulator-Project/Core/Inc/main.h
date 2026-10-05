@@ -59,6 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
+#define BTN_MENU_Pin GPIO_PIN_2
+#define BTN_MENU_GPIO_Port GPIOA
 #define FLASH_CS_Pin GPIO_PIN_4
 #define FLASH_CS_GPIO_Port GPIOA
 #define BTN_LIGHT_Pin GPIO_PIN_11

@@ -63,6 +63,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(STATUS_LED_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : BTN_MENU_Pin */
+  GPIO_InitStruct.Pin = BTN_MENU_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BTN_MENU_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : FLASH_CS_Pin */
   GPIO_InitStruct.Pin = FLASH_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
